@@ -1,0 +1,28 @@
+iperf3_server:
+# Linuxbox as iperf3 server
+  ipv4: 10.152.10.48
+  port: 5201
+  # port: 6099
+
+iperf3_client:
+# Fortigate as iperf3 client
+  port: 5201
+  # port: 6099
+  protocol: tcp
+
+fortigate:
+  username: !ENV ${USER}
+  password: !ENV ${PASSWORD}
+
+netbox:
+  ipv4: 10.152.10.49
+  port: 443
+  use_ssl: True
+  token_ro: 3fd43f4bc081e36e03f888afe28751b146aaed53
+  token_rw: tbd
+
+paths:
+  output_files: out_files
+  output_run: out_rundata
+
+repeat_counter: 4

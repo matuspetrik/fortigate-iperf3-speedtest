@@ -1,0 +1,8 @@
+venv
+10.*
+output*
+Libs/__pycache__*
+Libs/__pycache__/.*
+clients-list
+output.*
+Vars/input.yaml
