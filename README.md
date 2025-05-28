@@ -6,6 +6,7 @@ python --version
     Python 3.12.3
 cd </wherever/this/project/is/stored>
 apt install python3.11-venv
+#### Rename Vars/input.yaml.orig to Vars/input.yaml and update the file
 source env.sh
 python main.py -h
 usage: main.py [-h] -c CLIENT_LIST -o OUTPUT_FILE
