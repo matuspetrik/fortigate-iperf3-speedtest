@@ -8,6 +8,17 @@ urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
 import pprint
 import requests
 
+class Utils:
+
+    def __init__(self):
+        pass
+
+    def check_ip_online(self, ip):
+        print(f"NOTE: Pinging { ip }")
+        response = os.system(f"ping -c 1 -q { ip }")
+        return response == 0
+
+
 class Paths:
 
     def __init__(self, inputVars):
@@ -56,6 +67,8 @@ class Convert:
 class NetboxAPI:
 
     def __init__(self, inputVars):
+        ''' Open an initial session to Netbox.
+        '''
         print(f"::Pulling data from Netbox API [{ inputVars.netbox.ipv4 }]")
         self.inputVars = inputVars
         counter = self.inputVars.repeat_counter
@@ -71,6 +84,10 @@ class NetboxAPI:
         return None
 
     def get_devices_dict(self, hostname=None):
+        ''' Get the device dictionary based on hostname input.
+            Input: hostname (string)
+            Output: device (dictionary)
+        '''
         print(f"  ... Getting devices data for { hostname }.")
         counter = self.inputVars.repeat_counter
         while counter >= 0:
@@ -84,6 +101,10 @@ class NetboxAPI:
         print(f"      ... Cannot connect to Netbox!")
 
     def get_devices_dict_by_params(self, **kwargs):
+        ''' Get the device dictionary based on provided parameters as input.
+            Input: variuos parameters (dictionary)
+            Output: device (dictionary)
+        '''
         print(f"  ... Getting devices data on these parameters {kwargs}")
         final_list = []
         for kwarg in kwargs:
@@ -92,14 +113,11 @@ class NetboxAPI:
                     final_list.append(f"{kwarg}={i}")
             else:
                 final_list.append(f"{kwarg}={kwargs[kwarg]}")
-        print(final_list)
-        final_string = "&".join(final_list)
-        print(final_string)
+        # print(final_list)
         counter = self.inputVars.repeat_counter
         while counter >= 0:
             try:
                 return self.netbox.dcim.get_devices(**kwargs)
-                # return self.netbox.dcim.get_devices(**final_string)
             except:
                 print(f"    ... attempting to connect... { self.inputVars.repeat_counter - counter +1 }/"
                       f"{ self.inputVars.repeat_counter + 1}")
