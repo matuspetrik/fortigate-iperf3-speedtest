@@ -15,6 +15,7 @@ from Libs.Functions import Logs
 from Libs.Functions import NetboxAPI
 from Libs.Functions import Vars
 from Libs.Functions import Convert
+from Libs.Functions import Utils
 import re
 import sys
 from pprint import pprint
@@ -118,22 +119,31 @@ def get_circuit_speed_from_netbox(device_json, netbox):
 def parse_output_to_final_file(clients_lst, path, netbox_obj):
     # netbox_obj = NetboxAPI(inputVars)
     final_dct = {}
-    for ip in clients_lst:
+    for ip_orig in clients_lst:
+        ip = ip_orig.split('/')[0]
         dict_tmp0 = {}
-        print(path)
-        with open(path+"/"+ip.split('/')[0], 'r') as file:
-            fileData = file.read()
-        jsonData = json.loads(fileData)
+        # print(path)
+        hostName = netbox_obj.get_devices_dict_by_params(primary_ip4=ip_orig)[0]['name']
+        device_json  = netbox_obj.get_devices_dict(hostName)
+        dict_tmp0['upload_contractual']   = get_circuit_speed_from_netbox(device_json, netbox_obj)
+        dict_tmp0['download_contractual'] = get_circuit_speed_from_netbox(device_json, netbox_obj)
         try:
-            hostName = jsonData['start']['system_info'].split()[1]
-            device_json  = netbox_obj.get_devices_dict(hostName)
-            dict_tmp0['upload_contractual']   = get_circuit_speed_from_netbox(device_json, netbox_obj)
-            dict_tmp0['download_contractual'] = get_circuit_speed_from_netbox(device_json, netbox_obj)
+            with open(path+"/"+ip, 'r') as file:
+                fileData = file.read()
+                jsonData = json.loads(fileData)
             dict_tmp0['upload'] = int(jsonData['end']['sum_sent']['bits_per_second'])
             dict_tmp0['download'] = int(jsonData['end']['sum_received']['bits_per_second'])
         except KeyError:
             print("Check Your firewall settings and IP addresses.")
-        else:
+        except: # json data not found in ip file
+            utils = Utils()
+            print("WARN: JSON file from device output loading problem. "
+                  "Checking device online status...")
+            if not utils.check_ip_online(ip):
+                print(f"WARN: { hostName } ({ ip }) is offline.")
+            dict_tmp0['upload']   = "0"
+            dict_tmp0['download'] = "0"
+        finally:
             final_dct[hostName] = dict_tmp0
     return final_dct
 
@@ -150,8 +160,10 @@ def update_client_list_from_netbox(netbox_obj, client_list_file):
     based on filter.
     '''
     # region_id=1 for Slovakia, region_id=3 for Austria, status: Active, role: Firewall, manufacturer: Fortinet, tenant: not SWAN
-    # fw_list = netbox_obj.get_devices_dict_by_params(region_id=[1,3], status="active", role_id=4, manufacturer_id=2, tenant_id__n=6)
-    fw_list = netbox_obj.get_devices_dict_by_params(region_id=1, status="active", role_id=4, manufacturer_id=2, tenant_id__n=6)
+    # fw_list = netbox_obj.get_devices_dict_by_params(region_id=1, status="active", role_id=4, manufacturer_id=2, tenant_id__n=6)
+    fw_list = netbox_obj.get_devices_dict_by_params(region_id=1, status="planned",
+                                                    name="SVK-ECOPEZIN-FW", role_id=4,
+                                                    manufacturer_id=2, tenant_id__n=6)
     with open(client_list_file, 'w') as file:
         for i in fw_list:
             ip = i['primary_ip4']['address']
