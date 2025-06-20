@@ -160,10 +160,15 @@ def update_client_list_from_netbox(netbox_obj, client_list_file):
     based on filter.
     '''
     # region_id=1 for Slovakia, region_id=3 for Austria, status: Active, role: Firewall, manufacturer: Fortinet, tenant: not SWAN
-    # fw_list = netbox_obj.get_devices_dict_by_params(region_id=1, status="active", role_id=4, manufacturer_id=2, tenant_id__n=6)
-    fw_list = netbox_obj.get_devices_dict_by_params(region_id=1, status="planned",
-                                                    name="SVK-ECOPEZIN-FW", role_id=4,
-                                                    manufacturer_id=2, tenant_id__n=6)
+    fw_list = netbox_obj.get_devices_dict_by_params(
+        region_id=1,
+        status="active",
+        # status="planned",
+        # name="SVK-ECOPEZIN-FW",
+        role_id=4,
+        manufacturer_id=2,
+        tenant_id__n=6
+        )
     with open(client_list_file, 'w') as file:
         for i in fw_list:
             ip = i['primary_ip4']['address']
