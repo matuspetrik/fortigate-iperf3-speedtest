@@ -1,17 +1,13 @@
-import netmiko
 import json
 from netmiko import ConnectHandler
 import iperf3
 from multiprocessing import Process
-import multiprocessing
 import time
 import datetime
-import os
-import logging
 import argparse
 from argparse import RawTextHelpFormatter
 from Libs.Functions import Paths
-from Libs.Functions import Logs
+from Libs.Functions import Logger
 from Libs.Functions import NetboxAPI
 from Libs.Functions import Vars
 from Libs.Functions import Convert
@@ -19,7 +15,6 @@ from Libs.Functions import Utils
 import re
 import sys
 from pprint import pprint
-
 
 def get_forti_commands(inputVars, fg_ip, fg_type_slug):
     intf = "WAN"
@@ -37,6 +32,9 @@ def get_forti_commands(inputVars, fg_ip, fg_type_slug):
     ])
 
 def get_clients_list(clients_list_file):
+    ''' Read the input file with IP addresses of devices
+    '''
+    logger = Logger().get_logger()
     try:
         ips = []
         with open(clients_list_file, 'r') as file:
@@ -47,26 +45,28 @@ def get_clients_list(clients_list_file):
                 ips.append(line)
         return ips
     except FileNotFoundError:
-        print("Clients list file not found.")
+        logger.error("Clients list file not found.")
         sys.exit(0)
 
 def print_app_info(clients_lst, commands_lst, paths, output_file):
-    print("=======================================================================================================================")
-    print(f"=== FOLLOWING DEVICES' INFO WILL BE FETCHED: { clients_lst }")
-    print(f"=== TOTAL NUMBER OF DEVICES TO BE FETCHED: { len(clients_lst) }")
-    print("=======================================================================================================================")
-    print(f"=== FOLLOWING COMMANDS WILL BE ISSUED: { commands_lst }")
-    print("=======================================================================================================================")
-    print(f"=== RUN OUTPUT CAN BE VIEWED AT:     tail -f { paths.path_run }output.log")
-    print("=======================================================================================================================")
-    print(f"=== OUTPUT FILES CAN BE VIEWED AT:     tail -f { paths.path_files }/")
-    print("=======================================================================================================================")
-    print(f"=== OUTPUT FILE STORED AT:     { output_file }")
-    print("=======================================================================================================================")
+    logger = Logger().get_logger()
+    logger.debug("=======================================================================================================================")
+    logger.debug(f"=== FOLLOWING DEVICES' INFO WILL BE FETCHED: { clients_lst }")
+    logger.debug(f"=== TOTAL NUMBER OF DEVICES TO BE FETCHED: { len(clients_lst) }")
+    logger.debug("=======================================================================================================================")
+    logger.debug(f"=== FOLLOWING COMMANDS WILL BE ISSUED: { commands_lst }")
+    logger.debug("=======================================================================================================================")
+    logger.debug(f"=== RUN OUTPUT CAN BE VIEWED AT:     tail -f { paths.path_run }output.log")
+    logger.debug("=======================================================================================================================")
+    logger.debug(f"=== OUTPUT FILES CAN BE VIEWED AT:     tail -f { paths.path_files }/")
+    logger.debug("=======================================================================================================================")
+    logger.debug(f"=== OUTPUT FILE STORED AT:     { output_file }")
+    logger.debug("=======================================================================================================================")
     return 0
 
 def run_iperf3_server(inputVars, fortigate_ip):
-    print(f"::Running test on Fortigate IP { fortigate_ip }\n "+
+    logger = Logger().get_logger()
+    logger.debug(f"::Running test on Fortigate IP { fortigate_ip }\n "+
           " ... Iperf3 Server has been started.")
     server = iperf3.Server()
     server.bind_address = f'{inputVars.iperf3_server.ipv4}'
@@ -75,6 +75,7 @@ def run_iperf3_server(inputVars, fortigate_ip):
     result = server.run()
 
 def run_iperf3_client(inputVars, fortigate_ip, commands_lst, path, time_start):
+    logger = Logger().get_logger()
     fortigate = {
         'device_type': 'fortinet', 
         'ip': fortigate_ip, 
@@ -85,7 +86,7 @@ def run_iperf3_client(inputVars, fortigate_ip, commands_lst, path, time_start):
         'ssh_config_file': '~/.ssh/config'
     }
     try:
-        print(f"  ... Iperf3 Client has been started.")
+        logger.debug(f"  ... Iperf3 Client has been started.")
         device_session = ConnectHandler(**fortigate)
         device_session.ansi_escape_codes = False
         device_session.enable()
@@ -101,28 +102,30 @@ def run_iperf3_client(inputVars, fortigate_ip, commands_lst, path, time_start):
                         the_file.write("\r\n")
                         the_file.close()
             except:
-                print(f"Cannot write file { filepath }.")
+                logger.debug(f"Cannot write file { filepath }.")
         device_session.disconnect()
-        print(f"  ... Iperf3 Client run completed in { round(time.time() - time_start, 2) } secs - OK.")
+        logger.debug(f"  ... Iperf3 Client run completed in { round(time.time() - time_start, 2) } secs - OK.")
     except:
-        print(f"Connection error to { fortigate_ip }. Forgot to export USER and PASSWORD?")
+        logger.error(f"Connection error to { fortigate_ip }. Forgot to export USER and PASSWORD?")
 
 def get_circuit_speed_from_netbox(device_json, netbox):
+    logger = Logger().get_logger()
     try:
         siteId = device_json[0]['site']['id']
     except:
-        print(f"    Q: Does the device exist in Netbox?")
+        logger.error(f"    Q: Does the device exist in Netbox?")
     ckt_speed = netbox.get_circuit_speed_from_sites_menu(siteId)
     ckt_speed_conv = Convert(ckt_speed)
     return ckt_speed_conv.bps
 
 def parse_output_to_final_file(clients_lst, path, netbox_obj):
+    logger = Logger().get_logger()
     # netbox_obj = NetboxAPI(inputVars)
     final_dct = {}
     for ip_orig in clients_lst:
         ip = ip_orig.split('/')[0]
         dict_tmp0 = {}
-        # print(path)
+        # logger.debug(path)
         hostName = netbox_obj.get_devices_dict_by_params(primary_ip4=ip_orig)[0]['name']
         device_json  = netbox_obj.get_devices_dict(hostName)
         dict_tmp0['upload_contractual']   = get_circuit_speed_from_netbox(device_json, netbox_obj)
@@ -134,13 +137,13 @@ def parse_output_to_final_file(clients_lst, path, netbox_obj):
             dict_tmp0['upload'] = int(jsonData['end']['sum_sent']['bits_per_second'])
             dict_tmp0['download'] = int(jsonData['end']['sum_received']['bits_per_second'])
         except KeyError:
-            print("Check Your firewall settings and IP addresses.")
+            logger.error("Check Your firewall settings and IP addresses.")
         except: # json data not found in ip file
             utils = Utils()
-            print("WARN: JSON file from device output loading problem. "
+            logger.error("WARN: JSON file from device output loading problem. "
                   "Checking device online status...")
             if not utils.check_ip_online(ip):
-                print(f"WARN: { hostName } ({ ip }) is offline.")
+                logger.error(f"WARN: { hostName } ({ ip }) is offline.")
             dict_tmp0['upload']   = "0"
             dict_tmp0['download'] = "0"
         finally:
@@ -157,13 +160,14 @@ def get_input_vars():
 
 def update_client_list_from_netbox(netbox_obj, client_list_file):
     ''' Return a list of json firewall data from netbox
-    based on filter.
+    based on filter and write their IPs to input file.
     '''
     # region_id=1 for Slovakia, region_id=3 for Austria, status: Active, role: Firewall, manufacturer: Fortinet, tenant: not SWAN
     fw_list = netbox_obj.get_devices_dict_by_params(
         region_id=1,
         status="active",
         # status="planned",
+        # FOR TESTING PURPOSES, WORK WITH SINGLE HOSTNAME ONLY
         # name="SVK-ECOPEZIN-FW",
         role_id=4,
         manufacturer_id=2,
@@ -180,7 +184,11 @@ if __name__ == '__main__':
     Run iperf3 server on Linuxbox.
     Run iperf3 client on Fortigate and store output to file.
     '''
-    print(f"\n\n### EXECUTION STARTED [{ datetime.datetime.now() }].")
+    # Rotate old logs
+    Logger().rotate_old_logs(Logger().log_file)
+    # Initiate logger
+    logger = Logger().get_logger()
+    logger.debug(f"### EXECUTION STARTED [{ datetime.datetime.now() }].")
     time_overall_start = time.time()
 
     # Arguments
@@ -193,6 +201,7 @@ if __name__ == '__main__':
     Fortigate Username and Password need to be exported before the script is run:
         export USER='supersecretuser'
         export PASSWORD='supersecretpassword'
+    Debug and error output is stored in `app.log` file.
     ''',
     epilog="Thanks for using fortigate-iperf3 tool.",
     formatter_class=RawTextHelpFormatter
@@ -207,7 +216,6 @@ if __name__ == '__main__':
     # inputVars = BaseConfig(parse_config('Vars/input.yaml'))
     inputVars = get_input_vars().inputVars
     path_all = Paths(inputVars)
-    logs = Logs(path_all.path_run)
     paths = path_all.path_run
 
     netbox_obj = NetboxAPI(inputVars)
@@ -245,13 +253,13 @@ if __name__ == '__main__':
         for proc in processes_lst:
             proc.join(timeout=240)
             if proc.is_alive():
-                print(f"Process taking too long. Skipping {client_ip.split('/')[0]}.")
+                logger.error(f"Process taking too long. Skipping {client_ip.split('/')[0]}.")
                 proc.terminate()
                 break
-        print(f"  ... Iperf3 Server has been stopped.")
+        logger.debug(f"  ... Iperf3 Server has been stopped.")
 
     # Parse output files for required values
     final_output = parse_output_to_final_file(clients_lst, path_all.path_files, netbox_obj)
     write_to_final_file(final_output, args.output_file)
 
-    print(f"### EXECUTION COMPLETED IN { round(time.time() - time_overall_start, 2) } SECS.")
+    logger.debug(f"### EXECUTION COMPLETED IN { round(time.time() - time_overall_start, 2) } SECS.")
