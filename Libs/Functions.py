@@ -1,12 +1,73 @@
 import os
+import datetime
+import sys
 from time import sleep
 import logging
 from pyaml_env import parse_config, BaseConfig
 from netbox import NetBox, status
 import urllib3
 urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
-import pprint
-import requests
+# import pprint
+
+
+class Logger:
+
+    def __init__(self, name=__name__, 
+                 file_level=logging.DEBUG, console_level=logging.ERROR):
+        """
+        Initialize the logger.
+
+        :param name: Logger name (usually __name__ of the module)
+        :param log_file: Path to the log file
+        :param file_level: Logging level for the file handler
+        :param console_level: Logging level for the console handler
+        :logger.error => print to stdout and file
+        :logger.debug => print only to file
+        """
+        self.file_level = file_level
+        self.console_level = console_level
+        self.log_file='app.log'
+        self.logger = logging.getLogger(name)
+        self.logger.setLevel(logging.DEBUG)  # Capture all levels; handlers filter further
+
+    def handlers(self):
+        # Prevent adding multiple handlers if logger already configured
+        if not self.logger.hasHandlers():
+            # File handler
+            file_handler = logging.FileHandler(self.log_file)
+            file_handler.setLevel(self.file_level)
+            file_formatter = logging.Formatter(
+                "[%(asctime)s::%(filename)s::%(lineno)d::%(funcName)s()] %(levelname)s: %(message)s", 
+                    datefmt='%Y-%m-%dT%H:%M:%S'
+            )
+            file_handler.setFormatter(file_formatter)
+
+            # Console handler
+            console_handler = logging.StreamHandler(sys.stdout)
+            console_handler.setLevel(self.console_level)
+            console_formatter = logging.Formatter(
+                '%(levelname)s - %(message)s'
+            )
+            console_handler.setFormatter(console_formatter)
+
+            # Add handlers to logger
+            self.logger.addHandler(file_handler)
+            self.logger.addHandler(console_handler)
+
+    def get_logger(self):
+        """ Return the configured logger instance.
+        """
+        self.handlers()
+        return self.logger
+
+    def rotate_old_logs(self, logfile):
+        """ Rename log file if already exists and continues in a fresh file.
+        """
+        if os.path.exists(logfile):
+            ct = os.path.getctime(logfile)
+            dt = datetime.datetime.fromtimestamp(ct).strftime('%Y%m%dT%H%M%S')
+            os.rename(logfile, f"{logfile}.{dt}")
+        return 0
 
 class Utils:
 
@@ -14,7 +75,8 @@ class Utils:
         pass
 
     def check_ip_online(self, ip):
-        print(f"NOTE: Pinging { ip }")
+        logger = Logger().get_logger()
+        logger.debug(f"NOTE: Pinging { ip }")
         response = os.system(f"ping -c 1 -q { ip }")
         return response == 0
 
@@ -22,6 +84,7 @@ class Utils:
 class Paths:
 
     def __init__(self, inputVars):
+        self.purge_files_in_directory(inputVars.paths.output_files)
         self.create_dir_if_not_exist(inputVars.paths.output_files)
         self.create_dir_if_not_exist(inputVars.paths.output_run)
         self.path_run = os.getcwd()+"/"+inputVars.paths.output_run
@@ -35,17 +98,19 @@ class Paths:
         if not os.path.exists(directory):
             os.makedirs(directory)
 
+    def purge_files_in_directory(self, dir):
+        logger = Logger().get_logger()
+        for file in os.listdir(dir):
+            file_path = os.path.join(dir, file)
+            try:
+                os.remove(file_path)
+            except Exception as e:
+                logger.error(f"Failed to delete { file_path }. Reason: { e }")
+
 
 class Vars:
     def __init__(self):
         self.inputVars = BaseConfig(parse_config('Vars/input.yaml'))
-
-
-class Logs:
-
-    def __init__(self, path):
-        logger = logging.getLogger("netmiko")
-        logging.basicConfig(filename=path+'/output.log', level=logging.DEBUG)
 
 
 class Convert:
@@ -69,7 +134,8 @@ class NetboxAPI:
     def __init__(self, inputVars):
         ''' Open an initial session to Netbox.
         '''
-        print(f"::Pulling data from Netbox API [{ inputVars.netbox.ipv4 }]")
+        logger = Logger().get_logger()
+        logger.debug(f"::Pulling data from Netbox API [{ inputVars.netbox.ipv4 }]")
         self.inputVars = inputVars
         counter = self.inputVars.repeat_counter
         while counter >= 0:
@@ -77,7 +143,7 @@ class NetboxAPI:
                 self.netbox = NetBox(host=inputVars.netbox.ipv4, port=inputVars.netbox.port,
                                     use_ssl=inputVars.netbox.use_ssl, auth_token=inputVars.netbox.token_ro)
             except:
-                print(f"  ... attempting to connect... { self.inputVars.repeat_counter - counter +1 }/"
+                logger.error(f"  ... attempting to connect... { self.inputVars.repeat_counter - counter +1 }/"
                       f"{ self.inputVars.repeat_counter + 1}")
             sleep(1)
             counter -= 1
@@ -88,24 +154,26 @@ class NetboxAPI:
             Input: hostname (string)
             Output: device (dictionary)
         '''
-        print(f"  ... Getting devices data for { hostname }.")
+        logger = Logger().get_logger()
+        logger.debug(f"  ... Getting devices data for { hostname }.")
         counter = self.inputVars.repeat_counter
         while counter >= 0:
             try:
                 return self.netbox.dcim.get_devices(name=hostname)
             except:
-                print(f"    ... attempting to connect... { self.inputVars.repeat_counter - counter +1 }/"
+                logger.error(f"    ... attempting to connect... { self.inputVars.repeat_counter - counter +1 }/"
                       f"{ self.inputVars.repeat_counter + 1}")
             sleep(1)
             counter -= 1
-        print(f"      ... Cannot connect to Netbox!")
+        logger.error(f"      ... Cannot connect to Netbox!")
 
     def get_devices_dict_by_params(self, **kwargs):
         ''' Get the device dictionary based on provided parameters as input.
             Input: variuos parameters (dictionary)
             Output: device (dictionary)
         '''
-        print(f"  ... Getting devices data on these parameters {kwargs}")
+        logger = Logger().get_logger()
+        logger.debug(f"  ... Getting devices data on these parameters {kwargs}")
         final_list = []
         for kwarg in kwargs:
             if type(kwargs[kwarg]) == list:
@@ -119,27 +187,28 @@ class NetboxAPI:
             try:
                 return self.netbox.dcim.get_devices(**kwargs)
             except:
-                print(f"    ... attempting to connect... { self.inputVars.repeat_counter - counter +1 }/"
+                logger.error(f"    ... attempting to connect... { self.inputVars.repeat_counter - counter +1 }/"
                       f"{ self.inputVars.repeat_counter + 1}")
             sleep(1)
             counter -= 1
-        print(f"      ... Cannot connect to Netbox!")
+        logger.error(f"      ... Cannot connect to Netbox!")
 
     def get_circuits_dict(self):
         ''' Netbox/menu/circuits
         Retrieve circuits data as json
         '''
-        print(f"  ... Getting circuits data.")
+        logger = Logger().get_logger()
+        logger.debug(f"  ... Getting circuits data.")
         counter = self.inputVars.repeat_counter
         while counter >= 0:
             try:
                 return self.netbox.circuits.get_circuits()
             except:
-                print(f"    ... attempting to connect... { self.inputVars.repeat_counter - counter +1 }/"
+                logger.error(f"    ... attempting to connect... { self.inputVars.repeat_counter - counter +1 }/"
                       f"{ self.inputVars.repeat_counter + 1}")
             sleep(1)
             counter -= 1
-        print(f"      ... Cannot connect to Netbox!")
+        logger.error(f"      ... Cannot connect to Netbox!")
 
     def get_site_id_from_device_name(self, device_name, devices):
         ''' Provide api/dcim/devices device name on input.
@@ -164,18 +233,19 @@ class NetboxAPI:
         in menu/Sites.
         A custom field 'cf_speed' needs to be defined and active in menu/Sites.
         '''
-        print(f"  ... Getting site data for Site ID { site_id }.")
+        logger = Logger().get_logger()
+        logger.debug(f"  ... Getting site data for Site ID { site_id }.")
         counter = self.inputVars.repeat_counter
         while counter > 0:
             try:
                 return self.netbox.dcim.get_sites(id=site_id)[0]['custom_fields']['cf_speed']
             except TypeError:
-                print(f"    ... does the integer value exist at the position of cf_speed field?")
+                logger.error(f"    ... does the integer value exist at the position of cf_speed field?")
                 counter = 0
                 return 0
             except:
-                print(f"    ... attempting to connect... { self.inputVars.repeat_counter - counter +1 }/"
+                logger.error(f"    ... attempting to connect... { self.inputVars.repeat_counter - counter +1 }/"
                       f"{ self.inputVars.repeat_counter + 1}")
             sleep(1)
             counter -= 1
-        print(f"      ... Cannot connect to Netbox!")
+        logger.error(f"      ... Cannot connect to Netbox!")

@@ -18,6 +18,7 @@ usage: main.py [-h] -c CLIENT_LIST -o OUTPUT_FILE
     Fortigate Username and Password need to be exported before the script is run:
         export USER='supersecretuser'
         export PASSWORD='supersecretpassword'
+    Debug and error output is stored in `app.log` file.
     
 
 options:
@@ -26,6 +27,7 @@ options:
 Required arguments:
   -c CLIENT_LIST, --client-list CLIENT_LIST
                         Provide clients list filename. One IP per line.
+                        Client list will be read from Netbox though.
   -o OUTPUT_FILE, --output-file OUTPUT_FILE
                         File to store the output JSON.
 
@@ -45,14 +47,14 @@ python main.py -c client_file -o output_file
 apt install pyenv
 cat > /usr/sbin/danucem-sites-iperf3-speed-test.sh << EOF
 \#\!\/bin\/bash
-cd /root/fortigate-iperf3/
-pyenv install 3.12.3 -y
-pyenv local 3.12.3
-python -m venv venv
-source venv/bin/activate
-pip install -r requirements.txt
-export USER='supersecretuser'
-export PASSWORD='supersecretpassword'
+cd /root/fortigate-iperf3/               >/dev/null 2>&1
+pyenv install 3.12.3 -y                  >/dev/null 2>&1
+pyenv local 3.12.3                       >/dev/null 2>&1
+python -m venv venv                      >/dev/null 2>&1
+source venv/bin/activate                 >/dev/null 2>&1
+pip install -r requirements.txt          >/dev/null 2>&1
+export USER='supersecretuser'            >/dev/null 2>&1
+export PASSWORD='supersecretpassword'    >/dev/null 2>&1
 python main.py -c client_file -o output_file
 EOF
 ```

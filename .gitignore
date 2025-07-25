@@ -6,3 +6,4 @@ Libs/__pycache__/.*
 clients-list
 output.*
 Vars/input.yaml
+app.log*
