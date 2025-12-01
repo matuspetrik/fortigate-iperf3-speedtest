@@ -33,7 +33,7 @@ class Logger:
     def handlers(self):
         # Prevent adding multiple handlers if logger already configured
         if not self.logger.hasHandlers():
-            # File handler
+            # File handler - logger.debug()
             file_handler = logging.FileHandler(self.log_file)
             file_handler.setLevel(self.file_level)
             file_formatter = logging.Formatter(
@@ -42,7 +42,7 @@ class Logger:
             )
             file_handler.setFormatter(file_formatter)
 
-            # Console handler
+            # Console handler - logger.error()
             console_handler = logging.StreamHandler(sys.stdout)
             console_handler.setLevel(self.console_level)
             console_formatter = logging.Formatter(

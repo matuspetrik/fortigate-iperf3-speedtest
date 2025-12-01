@@ -137,13 +137,13 @@ def parse_output_to_final_file(clients_lst, path, netbox_obj):
             dict_tmp0['upload'] = int(jsonData['end']['sum_sent']['bits_per_second'])
             dict_tmp0['download'] = int(jsonData['end']['sum_received']['bits_per_second'])
         except KeyError:
-            logger.error("Check Your firewall settings and IP addresses.")
+            logger.debug(f"ERROR: { ip }: Check Your firewall settings and IP addresses.")
         except: # json data not found in ip file
             utils = Utils()
-            logger.error("WARN: JSON file from device output loading problem. "
+            logger.debug("WARN: JSON file from device output loading problem. "
                   "Checking device online status...")
             if not utils.check_ip_online(ip):
-                logger.error(f"WARN: { hostName } ({ ip }) is offline.")
+                logger.debug(f"WARN: { hostName } ({ ip }) is offline.")
             dict_tmp0['upload']   = "0"
             dict_tmp0['download'] = "0"
         finally:
