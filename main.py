@@ -1,5 +1,5 @@
 import json
-from netmiko import ConnectHandler
+from netmiko import ConnectHandler, NetmikoTimeoutException
 import iperf3
 from multiprocessing import Process
 import time
@@ -105,7 +105,10 @@ def run_iperf3_client(inputVars, fortigate_ip, commands_lst, path, time_start):
                 logger.debug(f"Cannot write file { filepath }.")
         device_session.disconnect()
         logger.debug(f"  ... Iperf3 Client run completed in { round(time.time() - time_start, 2) } secs - OK.")
-    except:
+    except NetmikoTimeoutException:
+        logger.error(f"Connection error to { fortigate_ip }. Device is not reachable.")
+    except Exception as instance:
+        logger.error(f"Exception type: { type(instance) }")
         logger.error(f"Connection error to { fortigate_ip }. Forgot to export USER and PASSWORD?")
 
 def get_circuit_speed_from_netbox(device_json, netbox):
